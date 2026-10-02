@@ -1,0 +1,458 @@
+import 'package:flutter/material.dart';
+
+import 'package:namida/class/count_per_row.dart';
+import 'package:namida/controller/scroll_search_controller.dart';
+import 'package:namida/controller/settings_controller.dart';
+import 'package:namida/core/dimensions.dart';
+import 'package:namida/core/enums.dart';
+import 'package:namida/core/extensions.dart';
+import 'package:namida/core/icon_fonts/broken_icons.dart';
+import 'package:namida/core/translations/language.dart';
+import 'package:namida/core/utils.dart';
+import 'package:namida/ui/widgets/custom_widgets.dart';
+import 'package:namida/ui/widgets/settings/extra_settings.dart';
+
+class ExpandableBox extends StatefulWidget {
+  final bool isBarVisible;
+  final bool? initialShowSearchBox;
+  final bool displayloadingIndicator;
+  final bool Function(bool newShow) onSearchBoxVisibilityChange;
+  final String leftText;
+  final void Function()? onLeftTextTap;
+  final void Function() onCloseButtonPressed;
+  final SortByMenu sortByMenuWidget;
+  final CustomTextField textField;
+  final bool disableSorting;
+  final bool enableSearch;
+  final double? textFieldHeight;
+  final ChangeGridCountWidget? gridWidget;
+  final List<Widget>? leftWidgets;
+  final Widget? leftTextTrailing;
+  final void Function()? onFilterIconLongPress;
+  final bool enableHero;
+
+  const ExpandableBox({
+    super.key,
+    required this.isBarVisible,
+    this.initialShowSearchBox,
+    this.displayloadingIndicator = false,
+    required this.onSearchBoxVisibilityChange,
+    required this.leftText,
+    this.onLeftTextTap,
+    required this.onCloseButtonPressed,
+    required this.sortByMenuWidget,
+    required this.textField,
+    this.disableSorting = false,
+    this.enableSearch = true,
+    this.textFieldHeight = 46.0,
+    this.gridWidget,
+    this.leftWidgets,
+    this.leftTextTrailing,
+    this.onFilterIconLongPress,
+    required this.enableHero,
+  });
+
+  @override
+  State<ExpandableBox> createState() => _ExpandableBoxState();
+}
+
+class _ExpandableBoxState extends State<ExpandableBox> with SingleTickerProviderStateMixin {
+  final _canShowSearchBoxRx = false.obs;
+
+  @override
+  void initState() {
+    try {
+      _canShowSearchBoxRx.value = widget.initialShowSearchBox ?? widget.textField.textFieldController?.text.isNotEmpty == true;
+    } catch (_) {
+      // -- text field disposed
+      _canShowSearchBoxRx.value = false;
+    }
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _canShowSearchBoxRx.close();
+    super.dispose();
+  }
+
+  void _onFilterIconTap([bool? newShow]) {
+    newShow ??= !_canShowSearchBoxRx.value;
+    final accept = widget.onSearchBoxVisibilityChange(newShow);
+    if (accept) {
+      _canShowSearchBoxRx.value = newShow;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = context.textTheme;
+    final leftWidgets = widget.leftWidgets;
+    final textFieldRow = Row(
+      children: [
+        const SizedBox(width: 12.0),
+        Expanded(
+          child: widget.textField,
+        ),
+        const SizedBox(width: 12.0),
+        NamidaIconButton(
+          onPressed: () {
+            widget.onCloseButtonPressed();
+            _onFilterIconTap(false);
+            ScrollSearchController.inst.unfocusKeyboard();
+          },
+          icon: Broken.close_circle,
+        ),
+        const SizedBox(width: 8.0),
+      ],
+    );
+    return NamidaHero(
+      enabled: widget.enableHero,
+      tag: 'ExpandableBox',
+      child: LayoutWidthProvider(
+        builder: (context, maxWidth) {
+          final partWidthLeftTextOrWidgets = maxWidth * 0.4;
+          final partWidthRightActions = maxWidth - partWidthLeftTextOrWidgets;
+          return Column(
+            children: [
+              AnimatedOpacity(
+                opacity: widget.isBarVisible ? 1 : 0,
+                duration: const Duration(milliseconds: 400),
+                child: AnimatedShow(
+                  duration: const Duration(milliseconds: 400),
+                  show: widget.isBarVisible,
+                  child: SizedBox(
+                    width: maxWidth,
+                    height: kExpandableBoxHeight,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.max,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(width: 18.0),
+                        Expanded(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: partWidthLeftTextOrWidgets),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ...?leftWidgets,
+                                  if (widget.leftText.isNotEmpty)
+                                    widget.onLeftTextTap != null
+                                        ? TapDetector(
+                                            onTap: widget.onLeftTextTap,
+                                            child: Text(
+                                              widget.leftText,
+                                              style: textTheme.displayMedium,
+                                              softWrap: false,
+                                              overflow: TextOverflow.fade,
+                                            ),
+                                          )
+                                        : Text(
+                                            widget.leftText,
+                                            style: textTheme.displayMedium,
+                                            softWrap: false,
+                                            overflow: TextOverflow.fade,
+                                          ),
+                                  if (widget.leftTextTrailing != null) ...[
+                                    const SizedBox(width: 6.0),
+                                    widget.leftTextTrailing!,
+                                  ],
+                                  if (widget.displayloadingIndicator) ...[
+                                    const SizedBox(width: 8.0),
+                                    const LoadingIndicator(),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: partWidthRightActions),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (widget.gridWidget != null) widget.gridWidget!,
+                                const SizedBox(width: 4.0),
+                                if (!widget.disableSorting) widget.sortByMenuWidget,
+                                if (!widget.disableSorting) const SizedBox(width: 6.0),
+                                if (widget.enableSearch)
+                                  NamidaIconButton(
+                                    horizontalPadding: 6.0,
+                                    icon: Broken.filter_search,
+                                    onPressed: _onFilterIconTap,
+                                    onLongPress: widget.onFilterIconLongPress,
+                                    iconSize: 20.0,
+                                  ),
+                                const SizedBox(width: 6.0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.enableSearch)
+                ObxO(
+                  rx: _canShowSearchBoxRx,
+                  builder: (context, canShowSearchBox) => AnimatedShow(
+                    duration: const Duration(milliseconds: 250),
+                    show: canShowSearchBox,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: textFieldRow,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class CustomTextField extends StatefulWidget {
+  final TextEditingController? textFieldController;
+  final String textFieldHintText;
+  final void Function(String value)? onTextFieldValueChanged;
+  final FocusNode? focusNode;
+  const CustomTextField({
+    super.key,
+    required this.textFieldController,
+    required this.textFieldHintText,
+    this.onTextFieldValueChanged,
+    this.focusNode,
+  });
+
+  @override
+  State<CustomTextField> createState() => _CustomTextFieldState();
+}
+
+class _CustomTextFieldState extends State<CustomTextField> {
+  FocusNode? _internalFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.focusNode == null) {
+      final node = _internalFocusNode = FocusNode();
+      ScrollSearchController.inst.registerSearchFocusNode(node);
+    }
+  }
+
+  @override
+  void dispose() {
+    final node = _internalFocusNode;
+    if (node != null) {
+      ScrollSearchController.inst.unregisterSearchFocusNode(node);
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      focusNode: widget.focusNode ?? _internalFocusNode,
+      controller: widget.textFieldController,
+      decoration: InputDecoration(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14.0.multipliedRadius),
+        ),
+        hintText: widget.textFieldHintText,
+      ),
+      onChanged: widget.onTextFieldValueChanged,
+    );
+  }
+}
+
+mixin SortByMenuBase {
+  List<Widget> children(BuildContext context);
+}
+
+class SortByMenuCustom with SortByMenuBase {
+  final List<Widget> Function(BuildContext context) childrenCallback;
+  const SortByMenuCustom({required this.childrenCallback});
+
+  @override
+  List<Widget> children(BuildContext context) => childrenCallback(context);
+}
+
+class SortByMenu extends StatelessWidget {
+  final SortByMenuBase? popupMenuChild;
+  final String title;
+  final bool isCurrentlyReversed;
+  final void Function()? onSortTap;
+  final void Function()? onReverseIconTap;
+
+  const SortByMenu({
+    super.key,
+    required this.popupMenuChild,
+    required this.title,
+    this.onSortTap,
+    this.onReverseIconTap,
+    required this.isCurrentlyReversed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+          child: NamidaTextButton(
+            minHeight: kExpandableBoxHeight * 0.5,
+            onTap:
+                onSortTap ??
+                () => NamidaPopupWrapper(
+                  children: () => popupMenuChild?.children(context) ?? [],
+                ).showPopupMenu(context),
+            text: title,
+            fontSizeMultiplier: 0.95,
+          ),
+        ),
+        NamidaIconButton(
+          horizontalPadding: 0.0,
+          icon: isCurrentlyReversed ? Broken.arrow_up_3 : Broken.arrow_down_2,
+          iconSize: 20.0,
+          onPressed: onReverseIconTap,
+        ),
+      ],
+    );
+  }
+}
+
+class ChangeGridCountWidget extends StatelessWidget {
+  final LibraryTab tab;
+  final bool forStaggered;
+
+  const ChangeGridCountWidget({
+    super.key,
+    required this.tab,
+    this.forStaggered = false,
+  });
+
+  IconData _resolveIcon(int count) => switch (count) {
+    1 => Broken.row_vertical,
+    2 => forStaggered ? Broken.grid_3 : Broken.grid_2,
+    3 => Broken.grid_8,
+    4 => Broken.grid_1,
+    < 0 => Broken.autobrightness,
+    _ => Broken.grid_1,
+  };
+
+  void _onTap(CountPerRow? count) {
+    if (count != null) {
+      if (count.rawValue != settings.mediaGridCounts.value.get(tab).rawValue) {
+        final newCount = ScrollSearchController.inst.animateChangingGridSize(tab, count);
+        settings.mediaGridCounts.update((counts) => counts[tab] = newCount);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final iconColor = context.theme.colorScheme.secondary;
+    return ObxO(
+      rx: settings.mediaGridCounts,
+      builder: (context, mediaGridCounts) {
+        final currentCount = mediaGridCounts.get(tab);
+        final count = currentCount.resolve(context);
+        String? secondaryText;
+        IconData? secondaryIcon;
+        if (currentCount.isAuto) {
+          secondaryIcon = Broken.autobrightness;
+        } else {
+          secondaryText = "$count";
+        }
+
+        return NamidaPopupWrapper(
+          openOnTap: currentCount.getNext() == null,
+          childrenDefault: () {
+            final autoCountPerRow = CountPerRow.autoForTab(tab);
+            return [
+              NamidaPopupItem(
+                icon: _resolveIcon(autoCountPerRow.rawValue),
+                title: lang.auto,
+                selected: currentCount.rawValue == autoCountPerRow.rawValue,
+                onTap: () => _onTap(autoCountPerRow),
+              ),
+              ...CountPerRow.getAvailableOptions().map(
+                (e) => NamidaPopupItem(
+                  icon: _resolveIcon(e.rawValue),
+                  title: '${e.rawValue}',
+                  selected: currentCount.rawValue == e.rawValue,
+                  onTap: () => _onTap(e),
+                ),
+              ),
+            ];
+          },
+          onTap: () => _onTap(currentCount.getNext()),
+          child: StackedIcon(
+            baseIcon: _resolveIcon(count),
+            secondaryText: secondaryText,
+            secondaryIcon: secondaryIcon,
+            baseIconColor: iconColor,
+            secondaryIconColor: iconColor,
+            iconSize: 20.0,
+            secondaryIconSize: 13.0,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class ExpandableBoxColumn extends StatelessWidget {
+  final LibraryTab tab;
+  final Widget header;
+  final Widget page;
+
+  const ExpandableBoxColumn({
+    super.key,
+    required this.tab,
+    required this.header,
+    required this.page,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        header,
+        Expanded(
+          child: page,
+        ),
+      ],
+    );
+  }
+}
+
+class ExpandableBoxEmptyAnimatedPadding extends StatelessWidget {
+  final LibraryTab tab;
+  const ExpandableBoxEmptyAnimatedPadding({super.key, required this.tab});
+
+  @override
+  Widget build(BuildContext context) {
+    return ObxO(
+      rx: tab.isBarVisible,
+      builder: (context, visible) => AnimatedShow(
+        show: !visible,
+        duration: const Duration(milliseconds: 400),
+        child: const SizedBox(height: kExpandableBoxHeight),
+      ),
+    );
+  }
+}

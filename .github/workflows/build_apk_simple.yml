@@ -1,0 +1,46 @@
+name: build_apk_simple
+
+# Manual workflow: builds a self-signed arm64 APK and uploads it as a downloadable artifact.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch external folders (replaces git submodules)
+        run: |
+          mkdir -p external
+          rm -rf external/language external/ffmpeg_build external/party_relay
+          git clone --depth 1 https://github.com/namidaco/namida-translations.git external/language
+          git clone --depth 1 https://github.com/MSOB7YY/ffmpeg_build.git external/ffmpeg_build
+          git clone --depth 1 https://github.com/namidaco/party_relay.git external/party_relay
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: pubspec.yaml
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Create throwaway signing key
+        run: |
+          keytool -genkeypair -v -keystore android/app/keystore.jks -storepass namida123 \
+            -keypass namida123 -alias namida -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Namida HiRes Build"
+          printf 'storePassword=namida123\nkeyPassword=namida123\nkeyAlias=namida\nstoreFile=keystore.jks\n' > android/key.properties
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK (arm64)
+        run: flutter build apk --target-platform android-arm64 --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: namida-hires-arm64
+          path: build/app/outputs/flutter-apk/*.apk
