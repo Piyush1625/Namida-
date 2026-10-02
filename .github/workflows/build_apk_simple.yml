@@ -12,11 +12,43 @@ jobs:
 
       - name: Fetch external folders (replaces git submodules)
         run: |
+          export GIT_TERMINAL_PROMPT=0
           mkdir -p external
           rm -rf external/language external/ffmpeg_build external/party_relay
+          # translations: required
           git clone --depth 1 https://github.com/namidaco/namida-translations.git external/language
-          git clone --depth 1 https://github.com/MSOB7YY/ffmpeg_build.git external/ffmpeg_build
-          git clone --depth 1 https://github.com/namidaco/party_relay.git external/party_relay
+          # ffmpeg_build: desktop-only (Windows/Linux), not needed for Android
+          git clone --depth 1 https://github.com/MSOB7YY/ffmpeg_build.git external/ffmpeg_build || mkdir -p external/ffmpeg_build
+          # party_relay: use the real one if reachable, otherwise a stand-in (LAN party feature disabled)
+          if ! git clone --depth 1 https://github.com/namidaco/party_relay.git external/party_relay; then
+            echo "party_relay not reachable, using stub"
+            rm -rf external/party_relay
+            mkdir -p external/party_relay/dart/lib
+            printf 'name: namida_party_relay\nversion: 0.0.1\npublish_to: none\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n' > external/party_relay/dart/pubspec.yaml
+            cat > external/party_relay/dart/lib/namida_party_relay.dart <<'DART'
+          class PartyRelayConfig {
+            final int maxRoomsTotal;
+            const PartyRelayConfig({this.maxRoomsTotal = 1});
+          }
+
+          class PartyRoomCreated {
+            final String code;
+            final String token;
+            const PartyRoomCreated(this.code, this.token);
+          }
+
+          class PartyRelayServer {
+            int get port => 0;
+            static Future<PartyRelayServer> start({int? port, PartyRelayConfig? config}) async {
+              throw UnsupportedError('LAN party relay is not available in this build');
+            }
+            PartyRoomCreated createRoom({dynamic name, dynamic did, dynamic pv, dynamic approval, dynamic password, dynamic public}) {
+              throw UnsupportedError('LAN party relay is not available in this build');
+            }
+            Future<void> close() async {}
+          }
+          DART
+          fi
 
       - uses: subosito/flutter-action@v2
         with:
